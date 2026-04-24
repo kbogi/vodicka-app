@@ -82,6 +82,14 @@ create table if not exists public.racers (
 create index if not exists racers_event_id_idx on public.racers (event_id);
 create index if not exists racers_event_bib_idx on public.racers (event_id, bib_number);
 
+-- UNIQUE(event_id, bib_number) pro živé (nesmazané) závodníky. Partial index,
+-- aby soft-deleted verze stejného čísla nebránila přejmenování.
+-- Pozn.: pokud v DB už existují duplikáty, tento index se nevytvoří — nejdřív je ručně
+-- uklid (viz merge UI na stránce Závodníci), pak pusť tento skript znovu.
+create unique index if not exists racers_event_bib_unique
+on public.racers (event_id, bib_number)
+where deleted_at is null;
+
 drop trigger if exists lww_racers on public.racers;
 create trigger lww_racers before update on public.racers
   for each row execute procedure public.lww_guard();

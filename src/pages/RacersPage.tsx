@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
-import { createRacer, deleteRacer, updateRacer } from '@/db/repo';
+import { createRacer, deleteRacer, mergeRacers, updateRacer } from '@/db/repo';
 import { useSession } from '@/store/session';
 import { BigButton } from '@/components/BigButton';
 import type { Racer } from '@/db/models';
@@ -20,6 +20,17 @@ export function RacersPage() {
     () => [...(racers ?? [])].sort((a, b) => a.bib_number - b.bib_number),
     [racers],
   );
+
+  // Seskupit podle bib_number — více než jeden záznam = konflikt.
+  const duplicateGroups = useMemo(() => {
+    const groups = new Map<number, Racer[]>();
+    for (const r of sorted) {
+      const arr = groups.get(r.bib_number) ?? [];
+      arr.push(r);
+      groups.set(r.bib_number, arr);
+    }
+    return [...groups.values()].filter(g => g.length > 1);
+  }, [sorted]);
 
   const [editing, setEditing] = useState<Racer | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -40,6 +51,20 @@ export function RacersPage() {
           + Přidat
         </BigButton>
       </div>
+
+      {duplicateGroups.length > 0 && (
+        <section className="bg-rose-950/30 border border-rose-800 rounded-2xl p-4 space-y-3">
+          <h2 className="text-lg font-semibold text-rose-300">⚠ Konflikty čísel</h2>
+          <p className="text-sm text-rose-200/80">
+            Stejné startovní číslo má víc závodníků. Typicky se to stane, když dvě zařízení přidají závodníka
+            se stejným bibem offline. Zachovej jednu verzi — jeho starty / cíle převezmou, ostatní se smažou.
+            Nebo jedné z verzí změň číslo přes „upravit".
+          </p>
+          {duplicateGroups.map(group => (
+            <DuplicateGroup key={group[0].bib_number} group={group} onEdit={r => { setEditing(r); setShowForm(true); }} />
+          ))}
+        </section>
+      )}
 
       {sorted.length === 0 ? (
         <p className="text-slate-500">Zatím žádní závodníci.</p>
@@ -202,6 +227,85 @@ function RacerForm({ eventId, racer, existingBibs, onClose }: FormProps) {
           <BigButton onClick={submit} variant="success" className="text-base py-2 px-4">Uložit</BigButton>
         </div>
       </div>
+    </div>
+  );
+}
+
+function DuplicateGroup({
+  group,
+  onEdit,
+}: {
+  group: Racer[];
+  onEdit: (r: Racer) => void;
+}) {
+  const [startCounts, setStartCounts] = useState<Record<string, number>>({});
+  const [finishCounts, setFinishCounts] = useState<Record<string, number>>({});
+
+  // Spočítat odkazující záznamy, aby uživatel věděl, kolik se toho převezme při sloučení.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const s: Record<string, number> = {};
+      const f: Record<string, number> = {};
+      for (const r of group) {
+        s[r.id] = await db.start_entries.where('racer_id').equals(r.id).and(e => !e.deleted_at).count();
+        f[r.id] = await db.finish_entries.where('racer_id').equals(r.id).and(e => !e.deleted_at).count();
+      }
+      if (!cancelled) {
+        setStartCounts(s);
+        setFinishCounts(f);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [group]);
+
+  async function keep(keepId: string) {
+    const discardIds = group.filter(r => r.id !== keepId).map(r => r.id);
+    const discardLabels = group
+      .filter(r => r.id !== keepId)
+      .map(r => `${r.first_name} ${r.last_name}`.trim() || '(bez jména)');
+    if (!confirm(
+      `Zachovat tuto verzi a ostatní (${discardLabels.join(', ')}) smazat?\n` +
+      `Jejich starty a cíle se převezmou na zachovanou verzi.`
+    )) return;
+    await mergeRacers(keepId, discardIds);
+  }
+
+  return (
+    <div className="bg-slate-800/60 rounded-xl p-3 space-y-2">
+      <div className="text-sm font-semibold text-rose-200">
+        #{group[0].bib_number} · {group.length} verzí
+      </div>
+      <ul className="space-y-1">
+        {group.map(r => {
+          const name = `${r.first_name} ${r.last_name}`.trim() || '(bez jména)';
+          const s = startCounts[r.id] ?? 0;
+          const f = finishCounts[r.id] ?? 0;
+          return (
+            <li key={r.id} className="flex items-center gap-2 bg-slate-900/60 rounded-lg p-2 text-sm">
+              <div className="flex-1 min-w-0">
+                <div className="truncate"><b>{name}</b>{r.category && <span className="text-slate-400"> · {r.category}</span>}{r.club && <span className="text-slate-400"> · {r.club}</span>}</div>
+                <div className="text-xs text-slate-500">
+                  vytvořen {new Date(r.created_at).toLocaleString()}
+                  {(s > 0 || f > 0) && <span> · starty: {s} · cíle: {f}</span>}
+                </div>
+              </div>
+              <button
+                onClick={() => keep(r.id)}
+                className="text-xs bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded whitespace-nowrap"
+              >
+                zachovat
+              </button>
+              <button
+                onClick={() => onEdit(r)}
+                className="text-xs text-cyan-400 hover:text-cyan-300 px-2"
+              >
+                přejmenovat
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

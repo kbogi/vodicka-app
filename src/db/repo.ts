@@ -162,6 +162,28 @@ export async function deleteRacer(id: string): Promise<void> {
   await softDelete('racers', id);
 }
 
+// Sloučí duplicitní závodníky: zachová `keepId`, všechny `discardIds`
+// soft-deletne a jejich start_entries / finish_entries převede na `keepId`.
+export async function mergeRacers(keepId: string, discardIds: string[]): Promise<void> {
+  const keep = await db.racers.get(keepId);
+  if (!keep || keep.deleted_at) throw new Error('Závodník k zachování neexistuje.');
+
+  for (const discardId of discardIds) {
+    if (discardId === keepId) continue;
+    const starts = await db.start_entries.where('racer_id').equals(discardId).toArray();
+    for (const s of starts) {
+      if (s.deleted_at) continue;
+      await upsert<StartEntry>('start_entries', { ...s, racer_id: keepId, updated_at: nowIso() });
+    }
+    const finishes = await db.finish_entries.where('racer_id').equals(discardId).toArray();
+    for (const f of finishes) {
+      if (f.deleted_at) continue;
+      await upsert<FinishEntry>('finish_entries', { ...f, racer_id: keepId, updated_at: nowIso() });
+    }
+    await softDelete('racers', discardId);
+  }
+}
+
 // ——————————————————— StartEntry (plánování startovky) ———————————————————
 
 async function getLiveStartEntries(stageId: string): Promise<StartEntry[]> {
