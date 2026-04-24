@@ -1,4 +1,4 @@
-# Vodička — časomíra pro enduro MTB
+# Vodičská časomíra
 
 PWA pro měření času na enduro MTB závodech s intervalovým startem. Funguje **plně offline** (v lese bez signálu) a po návratu na internet se synchronizuje do cloudu (Supabase, druhá fáze).
 

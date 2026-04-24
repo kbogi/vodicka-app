@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Vodička — časomíra enduro MTB',
-        short_name: 'Vodička',
+        name: 'Vodičská časomíra',
+        short_name: 'Vodičská',
         description: 'Časoměřičský nástroj pro enduro MTB závody s intervalovým startem',
         theme_color: '#0f172a',
         background_color: '#0f172a',
