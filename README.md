@@ -267,6 +267,14 @@ Plus v prohlížeči: `indexedDB.deleteDatabase('vodicka'); location.reload();`
 
 ---
 
-## Licence & autor
+## Licence
 
-Interní tool, neřešíme licenci. Postaveno pro konkrétní enduro závody.
+Tento projekt je uvolněn pod **[European Union Public Licence v. 1.2](LICENSE)** (EUPL-1.2) — oficiální volná licence Evropské unie, kompatibilní s GPL, AGPL, MPL a dalšími copyleft licencemi.
+
+V zásadě:
+- Můžeš kód **používat, kopírovat, upravovat, distribuovat** (včetně komerčně).
+- Musíš **zachovat licenční oznámení** a odkaz na zdrojové kódy.
+- Deriváty (upravené verze) se šíří pod stejnou (nebo kompatibilní) licencí.
+- Kód jde **bez záruky** — použití na vlastní odpovědnost.
+
+Plný text licence v 23 jazycích (včetně češtiny) najdeš na <https://joinup.ec.europa.eu/collection/eupl>.
