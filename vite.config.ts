@@ -27,17 +27,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.hostname.endsWith('supabase.co'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-cache',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
-            },
-          },
-        ],
+        // Supabase requesty záměrně necháváme bez SW cache: NetworkFirst tu
+        // dřív při špatném signálu servíroval stará data jako "úspěšný" pull.
+        // Offline stav drží IndexedDB, cache API do toho nemá co mluvit.
       },
       devOptions: {
         enabled: false,

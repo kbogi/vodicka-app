@@ -1,7 +1,7 @@
 import { db } from '@/db/schema';
 import type { OutboxItem } from '@/db/models';
 import { SYNC_TABLES, supabase, supabaseConfigured, type SyncTable } from './supabase';
-import { applyRemoteRow } from './applyRemote';
+import { applyRemoteRow, applyRemoteRows } from './applyRemote';
 
 export type SyncState =
   | 'disabled'
@@ -33,6 +33,7 @@ class SyncEngine {
   private pullTimer: number | null = null;
   private channels: ReturnType<NonNullable<typeof supabase>['channel']>[] = [];
   private started = false;
+  private bootstrapped = false;
   private pushingNow = false;
   private pullingNow = false;
 
@@ -91,12 +92,18 @@ class SyncEngine {
     this.channels = [];
   }
 
+  // Při kolísajícím signálu chodí online/offline eventy opakovaně — plný
+  // bootstrap tu nesmí běžet pokaždé (hammeruje IndexedDB a blokuje UI).
+  // Catch-up po výpadku obstará rychlý pull; realtime kanály si supabase-js
+  // reconnectuje samo.
   private onOnline = async () => {
     this.emit({ state: 'syncing' });
-    await this.bootstrap();
-    this.startRealtime();
+    if (!this.bootstrapped) {
+      await this.bootstrap();
+      this.startRealtime();
+    }
     this.schedulePush(500);
-    this.schedulePull(10_000);
+    this.schedulePull(1_000);
   };
 
   private onOffline = () => {
@@ -110,12 +117,9 @@ class SyncEngine {
       for (const table of SYNC_TABLES) {
         const { data, error } = await supabase.from(table).select('*');
         if (error) throw error;
-        if (data) {
-          for (const row of data) {
-            await applyRemoteRow(table, row as never);
-          }
-        }
+        if (data) await applyRemoteRows(table, data as never[]);
       }
+      this.bootstrapped = true;
       this.emit({ state: 'online', lastSyncedAt: new Date().toISOString() });
     } catch (e) {
       this.emit({ state: 'error', lastError: formatError(e) });
@@ -167,11 +171,7 @@ class SyncEngine {
       for (const table of SYNC_TABLES) {
         const { data, error } = await supabase.from(table).select('*');
         if (error) throw error;
-        if (data) {
-          for (const row of data) {
-            await applyRemoteRow(table, row as never);
-          }
-        }
+        if (data) await applyRemoteRows(table, data as never[]);
       }
       this.emit({ lastSyncedAt: new Date().toISOString() });
     } catch (e) {

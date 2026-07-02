@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db/schema';
 import { useSession } from '@/store/session';
@@ -73,6 +73,8 @@ export function FinishPage() {
   const [selectedRacerId, setSelectedRacerId] = useState('');
   const [manualTime, setManualTime] = useState('');
   const [assigningEntry, setAssigningEntry] = useState<FinishEntry | null>(null);
+  const [tapFlash, setTapFlash] = useState(false);
+  const lastPointerTapRef = useRef(0);
 
   // Parse vstupu: jen-čísla → bib; cokoliv jiného → volný text (note).
   const whoParsed = useMemo(() => {
@@ -108,14 +110,32 @@ export function FinishPage() {
     return <div className="p-4 max-w-3xl mx-auto text-slate-400">Nejdříve vytvoř úsek (stage) na stránce „Domů".</div>;
   }
 
-  async function tap() {
+  async function recordTap(pressEpochMs: number) {
     if (!stageId) return;
+    setTapFlash(true);
+    window.setTimeout(() => setTapFlash(false), 250);
+    navigator.vibrate?.(40);
     await createFinishEntry({
       stage_id: stageId,
       racer_id: null,
       bib_guess: null,
-      finish_time: nowIso(),
+      finish_time: new Date(pressEpochMs).toISOString(),
     });
+  }
+
+  // event.timeStamp razítkuje prohlížeč v okamžiku dotyku — čas je správný,
+  // i když je main thread zrovna zablokovaný a handler doběhne později.
+  function tapPointerDown(e: ReactPointerEvent) {
+    if (e.button !== 0) return;
+    lastPointerTapRef.current = performance.now();
+    void recordTap(performance.timeOrigin + e.timeStamp);
+  }
+
+  // Fallback pro klávesnici (Enter/mezerník negeneruje pointerdown);
+  // click následující po pointerdown se ignoruje, ať se tap nezdvojí.
+  function tapClick() {
+    if (performance.now() - lastPointerTapRef.current < 700) return;
+    void recordTap(Date.now());
   }
 
   async function submitFinish() {
@@ -185,8 +205,9 @@ export function FinishPage() {
               <h2 className="text-lg font-semibold">Tap mód — klikni když projede</h2>
               <BigButton
                 variant="success"
-                className="w-full py-8"
-                onClick={tap}
+                className={`w-full py-8 transition ${tapFlash ? 'ring-4 ring-white brightness-125' : ''}`}
+                onPointerDown={tapPointerDown}
+                onClick={tapClick}
               >
                 <span className="block text-5xl font-bold">DOJEL</span>
                 <span className={`block mt-2 text-base font-semibold ${currentStage ? 'text-emerald-900/80' : 'text-amber-200'}`}>

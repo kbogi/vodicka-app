@@ -5,6 +5,21 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 export const supabaseConfigured = Boolean(url && anonKey);
 
+// Při špatném signálu (online, ale skoro nic neteče) visí fetch bez timeoutu
+// i minuty a blokuje sync frontu. Radši rychle selhat — engine to za chvíli
+// zkusí znovu.
+const FETCH_TIMEOUT_MS = 8_000;
+
+const fetchWithTimeout: typeof fetch = (input, init = {}) => {
+  const timeout = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+  const signal = init.signal
+    ? typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([init.signal, timeout])
+      : init.signal
+    : timeout;
+  return fetch(input, { ...init, signal });
+};
+
 export const supabase: SupabaseClient | null = supabaseConfigured
   ? createClient(url!, anonKey!, {
       auth: {
@@ -13,6 +28,9 @@ export const supabase: SupabaseClient | null = supabaseConfigured
       },
       realtime: {
         params: { eventsPerSecond: 10 },
+      },
+      global: {
+        fetch: fetchWithTimeout,
       },
     })
   : null;
