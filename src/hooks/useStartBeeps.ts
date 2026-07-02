@@ -57,10 +57,13 @@ export function useStartBeeps(targetIso: string | null): void {
     add(0, 1760, 0.6);
 
     return () => {
-      // Zrušit jen beepy, které ještě nezačaly hrát — START tón se nesmí
-      // useknout, když se hned po startu přepne cíl odpočtu na dalšího.
+      // Zrušit jen beepy dál v budoucnu. START tón leží přesně na okamžiku,
+      // kdy auto-start přepne odpočet na dalšího závodníka — bez rezervy by
+      // ho tenhle cleanup stihl zrušit dřív, než zazní (drift audio hodin
+      // vs. Date.now + rychlost liveQuery).
+      const keepUntil = audio.currentTime + 0.25;
       for (const { osc, when } of scheduled) {
-        if (when > audio.currentTime) {
+        if (when > keepUntil) {
           try { osc.stop(); } catch { /* už dohrál */ }
         }
       }

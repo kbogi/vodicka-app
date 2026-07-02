@@ -81,6 +81,20 @@ export function StartPage() {
     () => sortedPlan.find(e => e.status === 'pending'),
     [sortedPlan],
   );
+
+  // Právě odstartovaný závodník zůstane na kartě „Na řadě" ještě chvíli
+  // viditelný, než se přepne na dalšího (u krátkých intervalů max polovina).
+  const holdMs = Math.min(3_000, (stage?.default_interval_seconds ?? 30) * 500);
+  const justStarted = useMemo(() => {
+    let latest: StartEntry | undefined;
+    for (const e of sortedPlan) {
+      if (e.status === 'started' && e.actual_start && (!latest || e.actual_start > latest.actual_start!)) {
+        latest = e;
+      }
+    }
+    if (!latest?.actual_start) return null;
+    return now.getTime() - new Date(latest.actual_start).getTime() < holdMs ? latest : null;
+  }, [sortedPlan, now, holdMs]);
   const nextCountdownMs = useMemo(() => {
     if (!nextPending?.scheduled_start) return null;
     return new Date(nextPending.scheduled_start).getTime() - now.getTime();
@@ -132,7 +146,9 @@ export function StartPage() {
       {stage && (
         <>
           {stage.first_start_at && (
-            <NextUp entry={nextPending ?? null} racer={nextPending?.racer_id ? racersById.get(nextPending.racer_id) ?? null : null} countdownMs={nextCountdownMs} />
+            justStarted
+              ? <JustStarted entry={justStarted} racer={justStarted.racer_id ? racersById.get(justStarted.racer_id) ?? null : null} />
+              : <NextUp entry={nextPending ?? null} racer={nextPending?.racer_id ? racersById.get(nextPending.racer_id) ?? null : null} countdownMs={nextCountdownMs} />
           )}
 
           <StageHeader stage={stage} plannedCount={sortedPlan.length} />
@@ -266,6 +282,32 @@ function ShiftControls({ stageId, intervalSeconds }: { stageId: string; interval
   );
 }
 
+function JustStarted({ entry, racer }: { entry: StartEntry; racer: Racer | null }) {
+  const name = racer
+    ? `${racer.first_name} ${racer.last_name}`.trim()
+    : entry.bib_guess != null
+      ? `(nepřiřazený #${entry.bib_guess})`
+      : '(nepřiřazený)';
+  const bib = racer ? `#${racer.bib_number}` : entry.bib_guess != null ? `#${entry.bib_guess}` : '#?';
+  return (
+    <section className="rounded-2xl p-4 md:p-6 border-2 bg-emerald-900/60 border-emerald-400">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="text-xs uppercase text-emerald-300">Odstartoval</div>
+          <div className="text-5xl md:text-7xl font-bold font-mono tabular">{bib}</div>
+          <div className="text-lg md:text-2xl truncate">{name}</div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-3xl md:text-5xl font-bold text-emerald-300">START!</div>
+          <div className="text-xl md:text-2xl font-mono tabular text-emerald-200 mt-1">
+            {entry.actual_start ? formatClock(new Date(entry.actual_start)) : ''}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function NextUp({
   entry,
   racer,
@@ -289,10 +331,12 @@ function NextUp({
       : '(nepřiřazený)';
   const bib = racer ? `#${racer.bib_number}` : entry.bib_guess != null ? `#${entry.bib_guess}` : '#?';
   const imminent = countdownMs != null && countdownMs < 10_000;
+  // Odpočet do budoucna zaokrouhlit nahoru: při 2,999 s zbývá lidsky „3 s".
+  // Zobrazené číslo tak sedí se zvukovým odpočtem (pípnutí přesně na T−3/−2/−1).
   const label = countdownMs == null
     ? '—'
     : countdownMs > 0
-      ? `za ${formatDurationShort(countdownMs)}`
+      ? `za ${formatDurationShort(Math.ceil(countdownMs / 1000) * 1000)}`
       : `zmeškáno o ${formatDurationShort(-countdownMs)}`;
   return (
     <section className={`rounded-2xl p-4 md:p-6 border-2 transition-colors ${imminent ? 'bg-emerald-900/40 border-emerald-500' : 'bg-slate-800/50 border-slate-700'}`}>
