@@ -180,7 +180,7 @@ export function FinishPage() {
 
       {stageId && (
         <>
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-4 items-start">
             <section className="bg-slate-800/50 rounded-2xl p-4 space-y-3">
               <h2 className="text-lg font-semibold">Tap mód — klikni když projede</h2>
               <BigButton
@@ -194,6 +194,21 @@ export function FinishPage() {
                 </span>
               </BigButton>
               <p className="text-xs text-slate-500">Uloží čas bez čísla. Přiřadíš později v seznamu nebo na stránce Výsledky.</p>
+            </section>
+
+            <section className="space-y-2 md:order-last md:col-span-2">
+              <h2 className="text-lg font-semibold">Posledních 20 cílů</h2>
+              <ul className="space-y-1">
+                {recent.map(f => (
+                  <RecentFinishItem
+                    key={f.id}
+                    entry={f}
+                    racer={f.racer_id ? racersById.get(f.racer_id) ?? null : null}
+                    onAssign={() => setAssigningEntry(f)}
+                  />
+                ))}
+                {recent.length === 0 && <li className="text-slate-500 text-sm">Zatím žádný cíl.</li>}
+              </ul>
             </section>
 
             <section className="bg-slate-800/50 rounded-2xl p-4 space-y-3">
@@ -245,21 +260,6 @@ export function FinishPage() {
               )}
             </section>
           </div>
-
-          <section className="space-y-2">
-            <h2 className="text-lg font-semibold">Posledních 20 cílů</h2>
-            <ul className="space-y-1">
-              {recent.map(f => (
-                <RecentFinishItem
-                  key={f.id}
-                  entry={f}
-                  racer={f.racer_id ? racersById.get(f.racer_id) ?? null : null}
-                  onAssign={() => setAssigningEntry(f)}
-                />
-              ))}
-              {recent.length === 0 && <li className="text-slate-500 text-sm">Zatím žádný cíl.</li>}
-            </ul>
-          </section>
         </>
       )}
 
