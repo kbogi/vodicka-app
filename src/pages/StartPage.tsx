@@ -317,9 +317,7 @@ function NextUp({
       : countdownMs > 0
         ? `za ${formatDurationShort(Math.ceil(countdownMs / 1000) * 1000)}`
         : `zmeškáno o ${formatDurationShort(-countdownMs)}`;
-  const labelCls = started
-    ? 'text-2xl md:text-4xl font-bold text-emerald-300'
-    : `text-base md:text-xl ${imminent ? 'text-emerald-300' : 'text-slate-400'}`;
+  const labelCls = `text-2xl md:text-4xl font-bold ${started || imminent ? 'text-emerald-300' : 'text-slate-400'}`;
   return (
     <section className={`rounded-2xl p-4 md:p-6 border-2 transition-colors ${imminent ? 'bg-emerald-900/40 border-emerald-500' : 'bg-slate-800/50 border-slate-700'}`}>
       <div className="flex items-center justify-between gap-4 flex-wrap">
