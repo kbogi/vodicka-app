@@ -49,8 +49,9 @@ Flow je **plánovací**, ne „klikací":
    - Nebo **+ Přidat všechny** (vygeneruje startovku ze všech závodníků v pořadí bibu).
 3. Každý závodník dostane automaticky **plánovaný čas** = `první start + pozice × interval`.
 4. Karta **„Na řadě"** ukazuje dalšího závodníka + **odpočet**. Když hodiny projdou plánovaný čas, status se automaticky přepne na *odstartoval* (actual_start = scheduled_start). Pokud operátor chce startovat dřív, má tlačítko **Start teď**.
-5. V seznamu startovky jde závodníky **posouvat šipkami ↑↓** (jen pending), označit **DNS**, **DNF**, nebo **úplně odebrat** (pořadí pod tím se stáhne nahoru a časy se přepočtou).
-6. Sekce **Nouzový start (mimo plán)** dole: okamžitý start zadaným číslem s actual_start = teď (např. pro závodníka, který přijel pozdě). Funguje i pro neexistující čísla — přiřadíš později.
+5. Tlačítko **🔊 zvuk** v hlavičce zapne zvukový odpočet: pípnutí na 3-2-1 sekundy před startem + delší vyšší tón přesně na START. Kvůli pravidlům prohlížečů se zapíná ručně kliknutím (při zapnutí krátce pípne pro kontrolu hlasitosti); po reloadu stránky je potřeba zapnout znovu.
+6. V seznamu startovky jde závodníky **posouvat šipkami ↑↓** (jen pending), označit **DNS**, **DNF**, nebo **úplně odebrat** (pořadí pod tím se stáhne nahoru a časy se přepočtou).
+7. Sekce **Nouzový start (mimo plán)** dole: okamžitý start zadaným číslem s actual_start = teď (např. pro závodníka, který přijel pozdě). Funguje i pro neexistující čísla — přiřadíš později.
 
 ⚠ Změna *prvního startu* nebo *intervalu* přepočte plánované časy všem `pending` závodníkům.
 
@@ -185,7 +186,6 @@ Na Androidu v Chrome: menu `⋮ → Nainstalovat aplikaci`. Na iOS v Safari: `Sd
 ### 🎯 Iterace 3 — Polish (nápady)
 
 - Import závodníků z CSV
-- Zvukový signál při startu (odpočet 5-4-3-2-1-START)
 - Offline-ready PDF export startovky a výsledků
 - Přidávání ad-hoc závodníků přímo na startu (bez návratu na Racers)
 - Přeházení startovního pořadí drag&drop

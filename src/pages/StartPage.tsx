@@ -17,6 +17,7 @@ import {
   updateStartEntry,
 } from '@/db/repo';
 import { useClock } from '@/hooks/useClock';
+import { primeAudio, useStartBeeps } from '@/hooks/useStartBeeps';
 import { formatClock, formatDurationShort } from '@/utils/time';
 import { isoToTimeInput, timeInputToIso } from '@/utils/plan';
 import type { Racer, Stage, StartEntry } from '@/db/models';
@@ -85,6 +86,13 @@ export function StartPage() {
     return new Date(nextPending.scheduled_start).getTime() - now.getTime();
   }, [nextPending, now]);
 
+  const [soundOn, setSoundOn] = useState(false);
+  useStartBeeps(soundOn ? nextPending?.scheduled_start ?? null : null);
+  function toggleSound() {
+    if (!soundOn) primeAudio();
+    setSoundOn(v => !v);
+  }
+
   if (!eventId) {
     return <div className="p-4 max-w-3xl mx-auto text-slate-400">Nejdříve vyber závod na stránce „Domů".</div>;
   }
@@ -108,6 +116,13 @@ export function StartPage() {
             ))}
           </select>
         </div>
+        <button
+          onClick={toggleSound}
+          className={`rounded-xl px-3 py-2 text-sm border ${soundOn ? 'bg-emerald-900/50 border-emerald-500 text-emerald-300' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
+          title="Zvukový odpočet 3-2-1-START"
+        >
+          {soundOn ? '🔊 zvuk zapnutý' : '🔇 zvuk vypnutý'}
+        </button>
         <div className="text-center">
           <div className="text-xs uppercase text-slate-400">Aktuální čas</div>
           <Clock size="xl" />
