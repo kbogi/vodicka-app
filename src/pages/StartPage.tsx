@@ -95,11 +95,15 @@ export function StartPage() {
     if (!latest?.actual_start) return null;
     return now.getTime() - new Date(latest.actual_start).getTime() < holdMs ? latest : null;
   }, [sortedPlan, now, holdMs]);
-  const nextCountdownMs = useMemo(() => {
-    if (!nextPending?.scheduled_start) return null;
-    return new Date(nextPending.scheduled_start).getTime() - now.getTime();
-  }, [nextPending, now]);
 
+  const displayed = justStarted ?? nextPending ?? null;
+  const displayedCountdownMs = useMemo(() => {
+    if (!displayed) return null;
+    const refIso = displayed.status === 'started'
+      ? displayed.actual_start ?? displayed.scheduled_start
+      : displayed.scheduled_start;
+    return refIso ? new Date(refIso).getTime() - now.getTime() : null;
+  }, [displayed, now]);
   const [soundOn, setSoundOn] = useState(false);
   useStartBeeps(soundOn ? nextPending?.scheduled_start ?? null : null);
   function toggleSound() {
@@ -146,9 +150,7 @@ export function StartPage() {
       {stage && (
         <>
           {stage.first_start_at && (
-            justStarted
-              ? <JustStarted entry={justStarted} racer={justStarted.racer_id ? racersById.get(justStarted.racer_id) ?? null : null} />
-              : <NextUp entry={nextPending ?? null} racer={nextPending?.racer_id ? racersById.get(nextPending.racer_id) ?? null : null} countdownMs={nextCountdownMs} />
+            <NextUp entry={displayed} racer={displayed?.racer_id ? racersById.get(displayed.racer_id) ?? null : null} countdownMs={displayedCountdownMs} />
           )}
 
           <StageHeader stage={stage} plannedCount={sortedPlan.length} />
@@ -282,32 +284,6 @@ function ShiftControls({ stageId, intervalSeconds }: { stageId: string; interval
   );
 }
 
-function JustStarted({ entry, racer }: { entry: StartEntry; racer: Racer | null }) {
-  const name = racer
-    ? `${racer.first_name} ${racer.last_name}`.trim()
-    : entry.bib_guess != null
-      ? `(nepřiřazený #${entry.bib_guess})`
-      : '(nepřiřazený)';
-  const bib = racer ? `#${racer.bib_number}` : entry.bib_guess != null ? `#${entry.bib_guess}` : '#?';
-  return (
-    <section className="rounded-2xl p-4 md:p-6 border-2 bg-emerald-900/60 border-emerald-400">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="min-w-0 flex-1">
-          <div className="text-xs uppercase text-emerald-300">Odstartoval</div>
-          <div className="text-5xl md:text-7xl font-bold font-mono tabular">{bib}</div>
-          <div className="text-lg md:text-2xl truncate">{name}</div>
-        </div>
-        <div className="text-right shrink-0">
-          <div className="text-3xl md:text-5xl font-bold text-emerald-300">START!</div>
-          <div className="text-xl md:text-2xl font-mono tabular text-emerald-200 mt-1">
-            {entry.actual_start ? formatClock(new Date(entry.actual_start)) : ''}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function NextUp({
   entry,
   racer,
@@ -330,19 +306,25 @@ function NextUp({
       ? `(nepřiřazený #${entry.bib_guess})`
       : '(nepřiřazený)';
   const bib = racer ? `#${racer.bib_number}` : entry.bib_guess != null ? `#${entry.bib_guess}` : '#?';
+  const started = entry.status === 'started';
   const imminent = countdownMs != null && countdownMs < 10_000;
   // Odpočet do budoucna zaokrouhlit nahoru: při 2,999 s zbývá lidsky „3 s".
   // Zobrazené číslo tak sedí se zvukovým odpočtem (pípnutí přesně na T−3/−2/−1).
   const label = countdownMs == null
     ? '—'
-    : countdownMs > 0
-      ? `za ${formatDurationShort(Math.ceil(countdownMs / 1000) * 1000)}`
-      : `zmeškáno o ${formatDurationShort(-countdownMs)}`;
+    : started
+      ? `−${formatDurationShort(Math.max(0, -countdownMs))}`
+      : countdownMs > 0
+        ? `za ${formatDurationShort(Math.ceil(countdownMs / 1000) * 1000)}`
+        : `zmeškáno o ${formatDurationShort(-countdownMs)}`;
+  const labelCls = started
+    ? 'text-2xl md:text-4xl font-bold text-emerald-300'
+    : `text-base md:text-xl ${imminent ? 'text-emerald-300' : 'text-slate-400'}`;
   return (
     <section className={`rounded-2xl p-4 md:p-6 border-2 transition-colors ${imminent ? 'bg-emerald-900/40 border-emerald-500' : 'bg-slate-800/50 border-slate-700'}`}>
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="min-w-0 flex-1">
-          <div className="text-xs uppercase text-slate-400">Na řadě</div>
+          <div className={`text-xs uppercase ${started ? 'text-emerald-300' : 'text-slate-400'}`}>{started ? 'Odstartoval' : 'Na řadě'}</div>
           <div className="text-5xl md:text-7xl font-bold font-mono tabular">{bib}</div>
           <div className="text-lg md:text-2xl truncate">{name}</div>
           {racer && (
@@ -354,13 +336,14 @@ function NextUp({
           <div className="text-2xl md:text-4xl font-mono tabular font-bold">
             {entry.scheduled_start ? formatClock(new Date(entry.scheduled_start)) : '—'}
           </div>
-          <div className={`text-base md:text-xl font-mono tabular mt-1 ${imminent ? 'text-emerald-300' : 'text-slate-400'}`}>
+          <div className={`font-mono tabular mt-1 ${labelCls}`}>
             {label}
           </div>
           <BigButton
             variant="success"
             className="mt-3 text-base md:text-xl py-2 md:py-3 px-4 md:px-6"
             onClick={() => markStarted(entry.id)}
+            disabled={started}
           >
             Start teď
           </BigButton>
