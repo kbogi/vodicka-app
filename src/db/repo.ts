@@ -193,6 +193,12 @@ async function getLiveStartEntries(stageId: string): Promise<StartEntry[]> {
     .sort((a, b) => a.order_index - b.order_index);
 }
 
+// Další volný order_index — po smazání odstartovaného zůstávají v číslování
+// mezery, takže `live.length` by mohlo kolidovat s existujícím indexem.
+function nextOrderIndex(live: StartEntry[]): number {
+  return live.length ? live[live.length - 1].order_index + 1 : 0;
+}
+
 async function getStageOrThrow(stageId: string): Promise<Stage> {
   const stage = await db.stages.get(stageId);
   if (!stage || stage.deleted_at) throw new Error('Stage neexistuje');
@@ -239,7 +245,7 @@ export async function enrollInStage(input: {
 }): Promise<StartEntry> {
   const stage = await getStageOrThrow(input.stage_id);
   const live = await getLiveStartEntries(stage.id);
-  const orderIndex = live.length;
+  const orderIndex = nextOrderIndex(live);
   const scheduled = nextScheduledStart(stage, live);
   const now = nowIso();
   return upsert<StartEntry>('start_entries', {
@@ -273,7 +279,7 @@ export async function generateStartovka(stageId: string): Promise<number> {
   const working = [...existing];
   const now = nowIso();
   for (const racer of toAdd) {
-    const orderIndex = working.length;
+    const orderIndex = nextOrderIndex(working);
     const scheduled = nextScheduledStart(stage, working);
     const entry: StartEntry = {
       id: newId(),
@@ -351,29 +357,40 @@ export async function moveStartEntry(id: string, direction: 'up' | 'down'): Prom
   });
 }
 
-// Odebere záznam a posune všechny pod něj o jeden slot nahoru (čas i pořadí).
-// Zachovává případné pauzy v rozvrhu — každý níž dědí čas slotu, který měl předchůdce.
+// Odebere záznam ze startovky. Přeplánování se týká výhradně pending
+// záznamů: každý pending pod odebraným zdědí pozici i čas předchozího
+// pending slotu (pauzy v rozvrhu se zachovají). Odstartovaní / DNS / DNF
+// zůstávají nedotčení — dřív se posouvali i oni a pending závodník mohl
+// zdědit plánovaný čas z minulosti, načež ho auto-start okamžitě
+// „odstartoval".
 export async function unenrollStartEntry(id: string): Promise<void> {
   const entry = await db.start_entries.get(id);
   if (!entry || entry.deleted_at) return;
   const stageId = entry.stage_id;
 
-  // Snapshot času per pozice PŘED smazáním.
-  const snapshot = await getLiveStartEntries(stageId);
-  const timeByPosition: (string | null)[] = snapshot.map(e => e.scheduled_start);
+  // Snapshot pending slotů PŘED smazáním.
+  const before = await getLiveStartEntries(stageId);
+  const pendingSlots = before
+    .filter(e => e.status === 'pending')
+    .map(e => ({ order_index: e.order_index, scheduled_start: e.scheduled_start }));
 
   await softDelete('start_entries', id);
 
-  const newLive = await getLiveStartEntries(stageId);
+  // Mazání ne-pending záznamu plán nemění.
+  if (entry.status !== 'pending') return;
+
+  const after = await getLiveStartEntries(stageId);
+  const pendingAfter = after.filter(e => e.status === 'pending');
   const now = nowIso();
-  for (let newIdx = 0; newIdx < newLive.length; newIdx++) {
-    const e = newLive[newIdx];
-    const wantTime = timeByPosition[newIdx] ?? null;
-    if (e.order_index !== newIdx || e.scheduled_start !== wantTime) {
+  for (let i = 0; i < pendingAfter.length; i++) {
+    const e = pendingAfter[i];
+    const slot = pendingSlots[i];
+    if (!slot) break;
+    if (e.order_index !== slot.order_index || e.scheduled_start !== slot.scheduled_start) {
       await upsert<StartEntry>('start_entries', {
         ...e,
-        order_index: newIdx,
-        scheduled_start: wantTime,
+        order_index: slot.order_index,
+        scheduled_start: slot.scheduled_start,
         updated_at: now,
       });
     }
@@ -401,7 +418,7 @@ export async function quickStart(input: {
 }): Promise<StartEntry> {
   const stage = await getStageOrThrow(input.stage_id);
   const live = await getLiveStartEntries(stage.id);
-  const orderIndex = live.length;
+  const orderIndex = nextOrderIndex(live);
   const now = nowIso();
   return upsert<StartEntry>('start_entries', {
     id: newId(),
